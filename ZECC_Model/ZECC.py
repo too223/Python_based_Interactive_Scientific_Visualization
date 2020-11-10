@@ -361,7 +361,7 @@ def T1_calc(dims, temps, wanted_temp, mat, time_range, rh): #calculating outer w
     P_air = rh * P_star1  # bulk pressure of air at t bulk -- modified by SR - using rh instead of a constant value. 
     P_star_out = np.exp(A - B / (C + Tc + 273)) #not sure if Tc is right here
     w = Kg0*SA*((P_star_out - P_air)/760)*18/1000 # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
-    T1=(T_bulk - (lam*w*1000 - q)/(h2*SA) - Tc) #not sure if this should be Tc or 10 degrees
+    T1=(T_bulk - (lam*w - q)/(h2*SA) - Tc) #not sure if this should be Tc or 10 degrees
    # cond=0
     #if mat =="Brick":
      #   cond=0.72
