@@ -327,62 +327,39 @@ g4.legend.background_fill_alpha=0.5
 g4.legend.location='top_left'
 g4.legend.click_policy='hide'
 
-def T1_calc(dims, temps, wanted_temp, mat, time_range, rh): #calculating outer wall temp
+def T1_calc(dims, temps, wanted_temp, mat, rh): #calculating outer wall temp
     rh=rh #relative humidity
     T_bulk = temps # degrees C of air surrounding outside
     Tc = wanted_temp  # degrees C of inner chamber
-    Kg0 = 1079 #moles/m2/atm.s.
+    Kg0 = 1.079 #moles/m2/atm.s.
     A = 18.3036
     B = 3816.44
     C = -46.13
-    m = 907  # kg of potatoes in a metric ton
+    m = 1000  # kg of potatoes in a metric ton
     hr = 9  # heat of respiration of potatoes in ml CO2 per kg hr
     rate = 122  # kcal per metric ton * day respiration multiplied to get rate
     h2 = 5  # convective heat transfer coefficient of outside air
-    q = hr * rate * 4.18 * (1 / 24) * (1 / 3600) * m/1000 * 1000  # total respiration rate of one metric ton of potatoes - in J/sec
-    #k_sand = 0.27  # thermal conductivity of dry sand W/mK
-    #k_water = 0.6  # thermal conductivity of water W/mK
-    #e_sand = 0.343  # porosity of sand
-    #k_ws = e_sand * k_water + (1 - e_sand) * k_sand  # calculates the thermal conductivity of wet sand
+    q=hr * rate * 4.18 * (1/3600) * m * (1/1000)  # total respiration rate of one metric ton of potatoes - in J/sec
     L0 = dims[0] # length of inner chamber
-    L1 = .1125  # length of inner brick layer
-    L2 = dims[3]  # length of sand layer
-    #L3 = .1125  # length of outer brick layer
+    L1 = .1125  # thickness of brick
+    L2 = dims[3]  # thickness of sand layer
     w0 = dims[1] # width of inner chamber
     h0 = dims[2]  # height of every layer in meters
-    #A_chamber = L0*h0*2 + w0*h0*2
-    #A_innerbrick = (L0+L1)*h0*2 + (w0+L1)*h0*2 #area of inner brick layer
-    #A_sand = (L0+L1+L2)*h0*2 + (w0+L1+L2)*h0*2 #area of sand layer
-    #h1 = 50  # convective heat transfer coefficient of inner chamber air
-    SA=2*h0*((L0+(2*L2)+(4*L1))+(w0+(2*L2)+(4*L1)))
+    SA=(2*h0*(L0+(2*L2)+(4*L1)))+(2*h0*(w0+(2*L2)+(4*L1)))
     h2 = 5  # convective heat transfer coefficient of outside air
     lam = 2257  # latent heat of evaporation of water kJ/kg
     P_star1 = np.exp(A - B / (C + T_bulk + 273))  # Antoine equation for vapor pressure at outside air
+    #print("P_star: ", P_star1) #for trouble-shooting purposes
     P_air = rh * P_star1  # bulk pressure of air at t bulk -- modified by SR - using rh instead of a constant value. 
-    P_star_out = np.exp(A - B / (C + Tc + 273)) #not sure if Tc is right here
-    w = Kg0*SA*((P_star_out - P_air)/760)*18/1000 # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
-    T1=(T_bulk - (lam*w - q)/(h2*SA) - Tc) #not sure if this should be Tc or 10 degrees
-   # cond=0
-    #if mat =="Brick":
-     #   cond=0.72
-    #elif mat=="Cardboard":
-    #    cond=0.048 
-    #elif mat=='Aluminum':
-     #   cond=205 
-    #elif mat=='Concrete':
-     #   cond=0.8
-    # calculations
-    #T4 = -((q * (1 / (h1*A_chamber))) - Tc)
-    #T3 = -((q * (L1 / (cond*A_innerbrick))) - T4)
-    #T2 = -((q * (L2 / (k_ws*A_sand))) - T3)
-    #T1=[]
-    #for i in time_range:
-     #   abc = (((L3 * h2 * T_bulk[i]) / k_brick) + T2) / (1 + (L3 * h2) / k_brick)
-      #  T1.append(abc)
-    #print(T1)
+    #print("P_air: ", P_air) #for trouble-shooting purposes
+    P_star_out = np.exp(A - B / (C + Tc + 273)) 
+    #print("P_star_out: ", P_star_out) #for trouble-shooting purposes
+    w = Kg0*SA*((P_star_out - P_air)/760)*(18/1000) # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
+    #print("w: ", w) #for trouble-shooting purposes
+    T1=(T_bulk - (lam*w - q)/(h2*SA) - Tc) 
     return T1
 
-Costa_T1=T1_calc(initial_dims, yearly_temps_df.iloc[2], 18, "Brick", range(0,12), yearly_rh_df.iloc[2])
+Costa_T1=T1_calc(initial_dims, yearly_temps_df.iloc[2], 18, "Brick", yearly_rh_df.iloc[2])
 sourceDP.data=dict(time=time_range1, temps=yearly_temps_df.iloc[2], dp=dp_Costa, T1=Costa_T1)
 gl3=g4.line('time', 'T1', source=sourceDP, legend_label="Outer Wall Temperature", line_width=2, line_dash=[8,2], color='purple')
 
@@ -403,6 +380,7 @@ def update_data(attr, old, new): #when slider or drop down menu values get adjus
     location=location_select.value
     time=time_select.value
     cond=0
+    dims=[length, width, height, thick]
 
     if mat =="Brick": #selectng conductivity value based off of material selected
         cond=0.72
@@ -414,7 +392,6 @@ def update_data(attr, old, new): #when slider or drop down menu values get adjus
         cond=0.8
         
     if time=="12 Months":  #different functions used for calculations depending on if time scale is 24 hours or 12 months
-        dims=[length, width, height, thick]
         out=calc_HC(yearly_temps_df.loc[location], dims, cond, want_temp)
         vap=[]
         for p in yearly_temps_df.loc[location]:
@@ -424,7 +401,7 @@ def update_data(attr, old, new): #when slider or drop down menu values get adjus
         latent=latent_heat(yearly_temps_df.loc[location])
         evap=evap_cool(water, latent, time_range1)
         dp=dew_point(yearly_temps_df.loc[location], yearly_rh_df.loc[location], range(0,12))
-        T1=T1_calc(dims, yearly_temps_df.loc[location], want_temp, mat, range(0,12), yearly_rh_df.loc[location])
+        T1=T1_calc(dims, yearly_temps_df.loc[location], want_temp, mat, yearly_rh_df.loc[location])
         #updating data source values for what to display
         source.data=dict(time=time_range1, output=out)
         sourceW.data=dict(time=time_range1, temps=yearly_temps_df.loc[location], water=water)
@@ -439,7 +416,6 @@ def update_data(attr, old, new): #when slider or drop down menu values get adjus
         g4.xaxis.axis_label="Time (in Months)"
         
     elif time=="24 Hours":  #different functions used for calculations depending on if time scale is 24 hours or 12 months
-        dims=[length, width, height, thick]
         out=HC_hourly(daily_temps_df.loc[location], dims, cond, want_temp)
         vap=[]
         for p in daily_temps_df.loc[location]:
@@ -448,7 +424,7 @@ def update_data(attr, old, new): #when slider or drop down menu values get adjus
         water=water_needed_hourly(dims, daily_temps_df.loc[location], vap, daily_rh.loc[location])
         latent=latent_heat(daily_temps_df.loc[location])
         evap=evap_cool_hourly(water, latent, time_range)
-        T1=T1_calc(dims, daily_temps_df.loc[location], want_temp, mat, range(0,24), daily_rh.loc[location])
+        T1=T1_calc(dims, daily_temps_df.loc[location], want_temp, mat, daily_rh.loc[location][0])
         dp=dew_point_hourly(daily_temps_df.loc[location], daily_rh.loc[location], range(0,24))
         #updating data source values for what to display
         source.data=dict(time=time_range, output=out)
@@ -472,7 +448,6 @@ def button_updates(): #when calculate button is pressed, this function re-calcul
     thick=slide_thick.value
     location=location_select.value
     interval=time_select.value
-    #place=CostaRica
     dims=[length, width, height, thick]
     water=0
     price=0
