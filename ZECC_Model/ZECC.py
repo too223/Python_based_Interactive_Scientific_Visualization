@@ -326,37 +326,66 @@ gl2=g4.line('time', 'dp', source=sourceDP, color='darkblue', line_width=2, line_
 g4.legend.background_fill_alpha=0.5
 g4.legend.location='top_left'
 g4.legend.click_policy='hide'
-
-def T1_calc(dims, temps, wanted_temp, mat, rh): #calculating outer wall temp
+    
+def T1_calc(dims, temps, wanted_temp, mat, time_range, rh): #calculating outer wall temp
     rh=rh #relative humidity
     T_bulk = temps # degrees C of air surrounding outside
     Tc = wanted_temp  # degrees C of inner chamber
     Kg0 = 1.079 #moles/m2/atm.s.
+
+    #antoines constants
     A = 18.3036
     B = 3816.44
     C = -46.13
-    m = 1000  # kg of potatoes in a metric ton
+
     hr = 9  # heat of respiration of potatoes in ml CO2 per kg hr
     rate = 122  # kcal per metric ton * day respiration multiplied to get rate
     h2 = 5  # convective heat transfer coefficient of outside air
-    q=hr * rate * 4.18 * (1/3600) * m * (1/1000)  # total respiration rate of one metric ton of potatoes - in J/sec
+    
+    
+    #k_sand = 0.27  # thermal conductivity of dry sand W/mK
+    #k_water = 0.6  # thermal conductivity of water W/mK
+    #e_sand = 0.343  # porosity of sand
+    #k_ws = e_sand * k_water + (1 - e_sand) * k_sand  # calculates the thermal conductivity of wet sand
+
+    #dimensions
     L0 = dims[0] # length of inner chamber
-    L1 = .1125  # thickness of brick
-    L2 = dims[3]  # thickness of sand layer
+    L1 = .1125  # length of inner brick layer
+    L2 = dims[3]  # length of sand layer
+    #L3 = .1125  # length of outer brick layer
     w0 = dims[1] # width of inner chamber
     h0 = dims[2]  # height of every layer in meters
-    SA=(2*h0*(L0+(2*L2)+(4*L1)))+(2*h0*(w0+(2*L2)+(4*L1)))
-    h2 = 5  # convective heat transfer coefficient of outside air
+    A_chamber = L0*h0*2 + w0*h0*2
+    A_innerbrick = (L0+L1)*h0*2 + (w0+L1)*h0*2 #area of inner brick layer
+    A_sand = (L0+L1+L2)*h0*2 + (w0+L1+L2)*h0*2 #area of sand layer
+    #h1 = 50  # convective heat transfer coefficient of inner chamber air
+    SA=2*h0*((L0+(2*L2)+(4*L1))+(w0+(2*L2)+(4*L1)))
+    Volume=L0*w0*h0 #m3
+    
+    hc=0.508 #w/(m k)
+
+    #major calculations
+    m=Volume*634.01 #density of potatoes by the volume gives mass (kg)
+    q = hr * rate * 4.18 * m * (1 / 3600) * (1/24)  # total respiration rate of one metric ton of potatoes - in J/sec (9 mL CO2/Kg hr) * (1000 kg/ mton) * (122 (kg m^2/s^2 * mton) * (1000g/kg) * (1/3600) *(4.18 j/g c) * (kj/1000j)
+    #h2 = 5  # convective heat transfer coefficient of outside air
     lam = 2257  # latent heat of evaporation of water kJ/kg
     P_star1 = np.exp(A - B / (C + T_bulk + 273))  # Antoine equation for vapor pressure at outside air
-    #print("P_star: ", P_star1) #for trouble-shooting purposes
+    print("P_star:", P_star1)
     P_air = rh * P_star1  # bulk pressure of air at t bulk -- modified by SR - using rh instead of a constant value. 
-    #print("P_air: ", P_air) #for trouble-shooting purposes
-    P_star_out = np.exp(A - B / (C + Tc + 273)) 
-    #print("P_star_out: ", P_star_out) #for trouble-shooting purposes
-    w = Kg0*SA*((P_star_out - P_air)/760)*(18/1000) # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
-    #print("w: ", w) #for trouble-shooting purposes
-    T1=(T_bulk - (lam*w - q)/(h2*SA) - Tc) 
+    print("P_Air:", P_air)
+    P_star_out = np.exp(A - B / (C + Tc + 273)) #not sure if Tc is right here
+    print("P_star_out:", P_star_out)
+    w = Kg0*(1000/18)*SA*((P_star_out - P_air)/760) # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
+    print("w:", w)
+    #T1=(T_bulk - (lam*w - q)/(h2*SA) - Tc) #not sure if this should be Tc or 10 degrees
+    #T1= (T_bulk - (lam*w - q)/(h2*SA)  Tc)
+    
+    T4 = Tc - q/(hc*A_innerbrick)
+    T3 = T4 - (L1*q)/(hc*A_chamber)
+    T2 = T3 - (L2*q)/(0.27*A_sand)
+    T1 = T2 - (L2*q)/(h2*A_chamber)
+    
+    print("T1:", T1)
     return T1
 
 Costa_T1=T1_calc(initial_dims, yearly_temps_df.iloc[2], 18, "Brick", yearly_rh_df.iloc[2])
