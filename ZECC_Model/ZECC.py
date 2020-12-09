@@ -179,7 +179,7 @@ def water_needed(dims, temp, SVP, rh): #function to calculate the amount of wate
 
 def water_needed_hourly(dims, temp, SVP, rh): #function to calculate the amount of water needed for the chamber to function properly on an hourly time scale
     theta=34.5 #(kg/(m^2*hr))
-    SA=2*(dims[0]+dims[3]+.225)*dims[2] + 2*dims[2]*(dims[1]+dims[3]+.225)
+    SA=2*(dims[0]+dims[3]+.225)*dims[2] + 2*dims[2]*(dims[1]+dims[3]+.225) #water surface area
     A = 18.3036 #constant value
     B = 3816.44 #constant value
     C = -46.13 #constant value
@@ -328,67 +328,132 @@ g4.legend.location='top_left'
 g4.legend.click_policy='hide'
     
 def T1_calc(dims, temps, wanted_temp, mat, time_range, rh): #calculating outer wall temp
+    
+    #DATA
     rh=rh #relative humidity
+    #rh = 0.9
     T_bulk = temps # degrees C of air surrounding outside
     Tc = wanted_temp  # degrees C of inner chamber
-    Kg0 = 1.079 #moles/m2/atm.s.
 
-    #antoines constants
+    #ANTOINES CONSTANTS
     A = 18.3036
     B = 3816.44
     C = -46.13
-
-    hr = 9  # heat of respiration of potatoes in ml CO2 per kg hr
-    rate = 122  # kcal per metric ton * day respiration multiplied to get rate
+    
+    #HEAT AND MASS TRANSFER COEFFICIENTS
+    h1 = 50  # convective heat transfer coefficient of inner chamber air
     h2 = 5  # convective heat transfer coefficient of outside air
+    k_sand = 0.27  # thermal conductivity of dry sand W/mK
+    k_water = 0.6  # thermal conductivity of water W/mK
+    e_sand = 0.343  # porosity of sand
+    k_ws = e_sand * k_water + (1 - e_sand) * k_sand  # calculates the thermal conductivity of wet sand
+    hc=0.508 #w/(m k)
+    lam = 2257  # latent heat of evaporation of water kJ/kg
+    Kg0 = 1079 #moles/m2/atm.s.
     
-    
-    #k_sand = 0.27  # thermal conductivity of dry sand W/mK
-    #k_water = 0.6  # thermal conductivity of water W/mK
-    #e_sand = 0.343  # porosity of sand
-    #k_ws = e_sand * k_water + (1 - e_sand) * k_sand  # calculates the thermal conductivity of wet sand
-
-    #dimensions
+    #DIMENSIONS
     L0 = dims[0] # length of inner chamber
     L1 = .1125  # length of inner brick layer
-    L2 = dims[3]  # length of sand layer
-    #L3 = .1125  # length of outer brick layer
+    L2 = dims[3]  # thickness of sand layer
+    L3 = .1125  # thickness of outer brick layer
     w0 = dims[1] # width of inner chamber
     h0 = dims[2]  # height of every layer in meters
     A_chamber = L0*h0*2 + w0*h0*2
-    A_innerbrick = (L0+L1)*h0*2 + (w0+L1)*h0*2 #area of inner brick layer
-    A_sand = (L0+L1+L2)*h0*2 + (w0+L1+L2)*h0*2 #area of sand layer
-    #h1 = 50  # convective heat transfer coefficient of inner chamber air
-    SA=2*h0*((L0+(2*L2)+(4*L1))+(w0+(2*L2)+(4*L1)))
-    Volume=L0*w0*h0 #m3
+    A_innerbrick = (L0+L1)*h0*2 + (w0+L1)*h0*2 #area of inner brick layer in m^2
+    A_sand = (L0+L1+L2)*h0*2 + (w0+L1+L2)*h0*2 #area of sand layer in m^2
+    SA=2*h0*((L0+(2*L2)+(4*L1))+(w0+(2*L2)+(4*L1))) #surface area of ____
+    Volume=L0*w0*h0 #inner chamber volume in m^3
+    #Water_volume = (2*L2*L0+2*L2*w0)*h0 #volume of water in the sand layer roughly, not accounting for porosity of sand
     
-    hc=0.508 #w/(m k)
-
     #major calculations
-    m=Volume*634.01 #density of potatoes by the volume gives mass (kg)
-    q = hr * rate * 4.18 * m * (1 / 3600) * (1/24)  # total respiration rate of one metric ton of potatoes - in J/sec (9 mL CO2/Kg hr) * (1000 kg/ mton) * (122 (kg m^2/s^2 * mton) * (1000g/kg) * (1/3600) *(4.18 j/g c) * (kj/1000j)
-    #h2 = 5  # convective heat transfer coefficient of outside air
-    lam = 2257  # latent heat of evaporation of water kJ/kg
-    P_star1 = np.exp(A - B / (C + T_bulk + 273))  # Antoine equation for vapor pressure at outside air
-    print("P_star:", P_star1)
-    P_air = rh * P_star1  # bulk pressure of air at t bulk -- modified by SR - using rh instead of a constant value. 
-    print("P_Air:", P_air)
-    P_star_out = np.exp(A - B / (C + Tc + 273)) #not sure if Tc is right here
-    print("P_star_out:", P_star_out)
-    w = Kg0*(1000/18)*SA*((P_star_out - P_air)/760) # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
-    print("w:", w)
-    #T1=(T_bulk - (lam*w - q)/(h2*SA) - Tc) #not sure if this should be Tc or 10 degrees
-    #T1= (T_bulk - (lam*w - q)/(h2*SA)  Tc)
+    m = Volume * .65937 #density of potatoes by the volume gives approximate mass (kg)
     
-    T4 = Tc - q/(hc*A_innerbrick)
-    T3 = T4 - (L1*q)/(hc*A_chamber)
-    T2 = T3 - (L2*q)/(0.27*A_sand)
-    T1 = T2 - (L2*q)/(h2*A_chamber)
+    q = 9 * 122 * 4.18 * m * (1/(3600 * 24 * 1000)) #(rate=122)*(hr=9)*(4.18)*m*(1/3600)*(1/24)
+    
+    P_star1 = np.exp(A - B / (C + T_bulk + 273))  # Antoine equation for vapor pressure at outside air
+    
+    print("P_star1:", P_star1)
+    
+    P_air = rh * P_star1  # bulk pressure of air at t bulk -- modified by SR - using rh instead of a constant value. 
+
+    print("P_Air:", P_air)
+    
+    P_star_out = np.exp(A - B / (C + Tc + 273)) #not sure if Tc is right here
+    
+    print("P_star_out:", P_star_out)
+    
+    #w = Kg0*(18/1000)*SA*((P_star_out - P_air)/760) # amount of water evaporating at the outer surface assuming that surface is at near saturation vapor pressure. value in lit per sec or kg per sec
+    
+    f = 0.045 #w/Water_volume #mass fraction of water
+    
+    #print("w:", w)
+    
+    #MATERIAL CHOICE, heat transfer coefficient of the outer wall material
+    cond=0
+    if mat =="Brick":
+        cond=0.72
+    elif mat=="Cardboard":
+        cond=0.048 
+    elif mat=='Aluminum':
+        cond=205 
+    elif mat=='Concrete':
+        cond=0.8
+    
+    #Kg0 = (q + lam*f*m + cond*SA*(T_bulk-T1)) / (lam * SA * (P_star_out-P_air))
+
+    #q + lam*f*m + cond*SA*(T_bulk-T1) = (lam*Kg0*SA*(P_star_out-P_air)
+    
+
+        
+    Tinnerwall = Tc - (((q + lam * (18/1000) * f * m) / (hc * A_chamber))) #Inner wall temp
+    
+    print("Innerwall:", Tinnerwall)
+    
+    Tinnersandinterface = Tinnerwall - (L1 * (q + lam * (18/1000) * f * m)) / (A_innerbrick * k_brick) #innersand temp
+    
+    print("innersand:", Tinnersandinterface)
+    
+    Twetsandinterface = Tinnersandinterface - (L2 * (q + lam * f * m)) / (k_ws * A_sand) #outer sand temp
+    
+    print("wetsand:", Twetsandinterface)
+    
+    T1 = (Twetsandinterface / (h2*SA)) + (((T_bulk*L0) / (cond*SA)) * ((L0 / (cond*SA)) + (1 / (h2*SA)))) #outer wall temperature
+    
+    
+    #TW = T4 - (L3 * (q + lam * f * m)) / (cond*SA)
+    
+    #TW = Tc - ((((q + lam * f * m) * L1)/(Kg0 * SA))) #inner wall temperature based on the desired temperature of the inner chamber
+    
+    #print("TW:", TW)
+    
+    #T3 = TW - ((q) * (L1 / (cond * A_innerbrick)))
+    
+    #print("T3:", T3)
+    
+    # T2 = Tc - ((q) * (L2 / (k_ws * A_sand))) 
+    
+    # print("T2:", T2)
+    
+    #T1 = (T_bulk - ((lam * Kg0 * SA * (P_star_out - P_air)) - q - lam * f * m) / (cond * SA))
+    
+    #T1 = T2 - ((L3 / A_chamber) * q)
+    
+    
+    # T1 = (T2 / (h2*SA)) + ((T_bulk*L0) / (cond*SA)) * ((L0 / (cond*SA)) + (1 / (h2*SA)))
+    
+    # T4 = -((q * (1 / h1)) - Tc)
+    
+    # T3 = -((q * (L1 / k_brick)) - T4)
+    
+    # T2 = -((q * (L2 / k_ws)) - T3)
+    
+    # T1 = (((L3 * h2 * T_bulk) / k_brick) - T2) / (1 + (L3 * h2) / k_brick)
     
     print("T1:", T1)
+    
     return T1
 
-Costa_T1=T1_calc(initial_dims, yearly_temps_df.iloc[2], 18, "Brick", yearly_rh_df.iloc[2])
+Costa_T1=T1_calc(initial_dims, yearly_temps_df.iloc[2], 18, "Brick", range(0,12), yearly_rh_df.iloc[2])
 sourceDP.data=dict(time=time_range1, temps=yearly_temps_df.iloc[2], dp=dp_Costa, T1=Costa_T1)
 gl3=g4.line('time', 'T1', source=sourceDP, legend_label="Outer Wall Temperature", line_width=2, line_dash=[8,2], color='purple')
 
@@ -430,7 +495,7 @@ def update_data(attr, old, new): #when slider or drop down menu values get adjus
         latent=latent_heat(yearly_temps_df.loc[location])
         evap=evap_cool(water, latent, time_range1)
         dp=dew_point(yearly_temps_df.loc[location], yearly_rh_df.loc[location], range(0,12))
-        T1=T1_calc(dims, yearly_temps_df.loc[location], want_temp, mat, yearly_rh_df.loc[location])
+        T1=T1_calc(dims, yearly_temps_df.loc[location], want_temp, mat, time_range, yearly_rh_df.loc[location])
         #updating data source values for what to display
         source.data=dict(time=time_range1, output=out)
         sourceW.data=dict(time=time_range1, temps=yearly_temps_df.loc[location], water=water)
